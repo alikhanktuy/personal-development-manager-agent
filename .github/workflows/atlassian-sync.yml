@@ -9,9 +9,9 @@ on:
         default: production
         type: environment
       dry_run:
-        description: Preview Jira issues and Confluence page without creating anything
+        description: Set true to preview only. Leave false to create Jira issues and the Confluence page.
         required: true
-        default: true
+        default: false
         type: boolean
       jira_base_url:
         description: Atlassian site URL, for example https://example.atlassian.net
