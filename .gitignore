@@ -1,0 +1,8 @@
+# Local environment files must never be committed.
+.env
+.env.*
+!.env.example
+
+# Python cache files.
+__pycache__/
+*.py[cod]
