@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create Jira issues and a Confluence page for the 2026 development plan.
 
-The script defaults to dry-run mode so the GitHub Actions workflow can preview
+The script can run in dry-run mode so the GitHub Actions workflow can preview
 planned Atlassian changes before creating anything. It reads credentials only
 from process environment variables and never prints the API token.
 """
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from html import escape
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -170,6 +170,27 @@ def require_env(name: str, *, secret: bool = False) -> str:
     return value
 
 
+def append_github_step_summary(lines: list[str]) -> None:
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
+    if not summary_path:
+        return
+
+    with open(summary_path, "a", encoding="utf-8") as summary_file:
+        summary_file.write("\n".join(lines))
+        summary_file.write("\n")
+
+
+def atlassian_web_url(base_url: str, webui_path: str | None) -> str | None:
+    if not webui_path:
+        return None
+
+    parsed = urlparse(webui_path)
+    if parsed.scheme and parsed.netloc:
+        return webui_path
+
+    return urljoin(base_url.rstrip("/") + "/", webui_path.lstrip("/"))
+
+
 def adf_text(text: str) -> dict[str, Any]:
     return {
         "type": "doc",
@@ -260,18 +281,29 @@ class AtlassianClient:
 
 
 def preview(project_key: str, space_id: str, parent_id: str | None) -> None:
-    print("Dry-run mode is enabled. No Jira issues or Confluence pages will be created.")
+    print("DRY_RUN=true: preview mode is enabled. No Jira issues or Confluence pages will be created.")
     print(f"Jira project: {project_key}")
     for issue in JIRA_ISSUES:
         print(f"- Jira {issue.issue_type}: {issue.summary} [{', '.join(issue.labels)}]")
     parent_label = parent_id if parent_id else "none"
     print(f"Confluence space ID: {space_id}; parent page ID: {parent_label}")
     print(f"- Confluence page: {CONFLUENCE_PAGE_TITLE}")
+    append_github_step_summary(
+        [
+            "## Atlassian planning artifacts",
+            "",
+            "**Mode:** dry run / preview only",
+            "",
+            "No Jira issues or Confluence pages were created because `dry_run` was enabled.",
+            "",
+            f"- Jira epics previewed: {len(JIRA_ISSUES)}",
+            f"- Confluence page previewed: {CONFLUENCE_PAGE_TITLE}",
+        ]
+    )
 
 
 def main() -> int:
     dry_run = is_dry_run()
-    token = require_env("ATLASSIAN_API_TOKEN", secret=True)
     email = require_env("ATLASSIAN_EMAIL")
     base_url = require_env("ATLASSIAN_BASE_URL")
     project_key = require_env("JIRA_PROJECT_KEY")
@@ -282,14 +314,36 @@ def main() -> int:
         preview(project_key, space_id, parent_id)
         return 0
 
+    token = require_env("ATLASSIAN_API_TOKEN", secret=True)
     client = AtlassianClient(base_url=base_url, email=email, token=token)
-    print("Dry-run mode is disabled. Creating Atlassian artifacts.")
+    print("DRY_RUN=false: creating Atlassian artifacts.")
+    created_issue_keys = []
     for issue in JIRA_ISSUES:
         created_issue = client.create_jira_issue(project_key, issue)
-        print(f"Created Jira issue {created_issue.get('key', '<unknown>')}: {issue.summary}")
+        issue_key = created_issue.get("key", "<unknown>")
+        created_issue_keys.append(issue_key)
+        print(f"Created Jira issue {issue_key}: {issue.summary}")
 
     created_page = client.create_confluence_page(space_id, parent_id)
-    print(f"Created Confluence page {created_page.get('id', '<unknown>')}: {CONFLUENCE_PAGE_TITLE}")
+    page_id = created_page.get("id", "<unknown>")
+    page_url = atlassian_web_url(base_url, created_page.get("_links", {}).get("webui"))
+    print(f"Created Confluence page {page_id}: {CONFLUENCE_PAGE_TITLE}")
+    if page_url:
+        print(f"Confluence page URL: {page_url}")
+
+    summary_lines = [
+        "## Atlassian planning artifacts",
+        "",
+        "**Mode:** create",
+        "",
+        f"- Jira issues created: {len(created_issue_keys)}",
+        f"- Jira issue keys: {', '.join(created_issue_keys)}",
+        f"- Confluence page created: {CONFLUENCE_PAGE_TITLE}",
+        f"- Confluence page ID: {page_id}",
+    ]
+    if page_url:
+        summary_lines.append(f"- Confluence page URL: {page_url}")
+    append_github_step_summary(summary_lines)
     return 0
 
 
