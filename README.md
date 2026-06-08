@@ -323,3 +323,31 @@ My highest career priority is becoming ready for the Lead Software Engineer asse
 My evergreen habits are English and gym.
 My biggest life priorities for autumn are master’s degree and apartment.
 My short-term summer priority is getting the driving license.
+
+## GitHub Actions Atlassian workflow
+
+The repository includes a manually triggered GitHub Actions workflow named **Create Atlassian planning artifacts**.
+It creates the suggested Jira epics and a Confluence page for the 2026 personal development plan.
+
+### Required GitHub Environment secret
+
+Store the Atlassian API token in the GitHub Environment that you select when running the workflow:
+
+* `ATLASSIAN_API_TOKEN`
+
+Do not store the token in the repository, do not put it in `.env` files, and do not print it in logs.
+The workflow reads it from the process environment as `ATLASSIAN_API_TOKEN`.
+
+### Workflow inputs
+
+Run the workflow with dry-run mode enabled first. Dry-run mode is the default and previews the Jira issues and Confluence page without creating anything.
+
+Required inputs:
+
+* `github_environment` — GitHub Environment that contains `ATLASSIAN_API_TOKEN`.
+* `dry_run` — keep this as `true` for the first run; set to `false` only after reviewing the preview.
+* `jira_base_url` — Atlassian site URL, for example `https://example.atlassian.net`.
+* `jira_project_key` — Jira project key where epics should be created.
+* `atlassian_email` — Atlassian account email used for API authentication.
+* `confluence_space_id` — Confluence space ID where the page should be created.
+* `confluence_parent_id` — optional parent page ID.

@@ -1,0 +1,65 @@
+name: Create Atlassian planning artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      github_environment:
+        description: GitHub Environment containing ATLASSIAN_API_TOKEN
+        required: true
+        default: production
+        type: environment
+      dry_run:
+        description: Preview Jira issues and Confluence page without creating anything
+        required: true
+        default: true
+        type: boolean
+      jira_base_url:
+        description: Atlassian site URL, for example https://example.atlassian.net
+        required: true
+        type: string
+      jira_project_key:
+        description: Jira project key where issues should be created
+        required: true
+        type: string
+      atlassian_email:
+        description: Atlassian account email for API authentication
+        required: true
+        type: string
+      confluence_space_id:
+        description: Confluence space ID where the page should be created
+        required: true
+        type: string
+      confluence_parent_id:
+        description: Optional Confluence parent page ID
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlassian-planning-${{ github.workflow }}-${{ inputs.github_environment }}
+  cancel-in-progress: false
+
+jobs:
+  create-atlassian-artifacts:
+    name: Create Jira issues and Confluence page
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.github_environment }}
+    env:
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      ATLASSIAN_EMAIL: ${{ inputs.atlassian_email }}
+      ATLASSIAN_BASE_URL: ${{ inputs.jira_base_url }}
+      JIRA_PROJECT_KEY: ${{ inputs.jira_project_key }}
+      CONFLUENCE_SPACE_ID: ${{ inputs.confluence_space_id }}
+      CONFLUENCE_PARENT_ID: ${{ inputs.confluence_parent_id }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Mask Atlassian API token
+        run: echo "::add-mask::${ATLASSIAN_API_TOKEN}"
+
+      - name: Create or preview Atlassian planning artifacts
+        run: python3 scripts/create_atlassian_artifacts.py
